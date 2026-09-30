@@ -1,7 +1,7 @@
 # Submission
 
-**Candidate name:** _Your name_
-**Date:** _Date_
+**Candidate name:** Oscar Kolodziejczyk
+**Date:** 9/30/2026
 **Time spent:** _Approximate hours_
 
 ---
@@ -28,15 +28,25 @@ _Briefly describe the approach you took for each task. Mention any trade-offs yo
 
 ### Task 3
 
+- Added the condition on declaration: "p.deleted_at IS NULL", i.e. product must not be deleted to be shown in the products list.
+- GET & PUT can still use soft-deleted products, but DELETE cant anymore, it throws an error.
+
 ### Task 4
 
 ### Task 5
+
+### Bonus B:
+
+- All errors return json, res.json() consistent, and we can extend the json to include other things ontop of just an error msg if we want.
 
 ---
 
 ## What I'd improve with more time
 
-_What would you add, refactor, or fix if you had another couple of hours?_
+1. create a POST /api/products/:id/restore
+ - Restores a soft deleted product and sets is deleted_at == NULL
+2. Edit fetchProduct(s) helpers to check for errors, so not every fetch call has to do it manually.
+3. 
 
 ---
 
