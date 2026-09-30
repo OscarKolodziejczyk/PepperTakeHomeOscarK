@@ -33,6 +33,10 @@ _Briefly describe the approach you took for each task. Mention any trade-offs yo
 
 ### Task 4
 
+- I imported a Loader from react, And added a simple loading screen if the network is slow. 
+- Ensured that the error page was very obvious (red box & text). 
+- I also added a retry button, so the user doesn't have to manually refresh the page on error. 
+
 ### Task 5
 
 ### Bonus B:
@@ -43,7 +47,7 @@ _Briefly describe the approach you took for each task. Mention any trade-offs yo
 
 ## What I'd improve with more time
 
-1. create a POST /api/products/:id/restore
+1. create a new endpoint: POST /api/products/:id/restore
  - Restores a soft deleted product and sets is deleted_at == NULL
 2. Edit fetchProduct(s) helpers to check for errors, so not every fetch call has to do it manually.
 3. 
