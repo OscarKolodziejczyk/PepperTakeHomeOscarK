@@ -32,7 +32,7 @@ router.get("/", (req, res) => {
       LEFT JOIN variants v ON v.product_id = p.id
     `;
 
-    const conditions: string[] = [];
+    const conditions: string[] = ["p.deleted_at IS NULL"]; // Exclude soft-deleted products from list
     const params: unknown[] = [];
 
     if (search) {
@@ -45,10 +45,9 @@ router.get("/", (req, res) => {
       params.push(Number(category_id));
     }
 
-    if (conditions.length > 0) {
-      query += " WHERE " + conditions.join(" AND ");
-    }
-
+    // Condition deleted b/c deleted_at always present. So the join always runs:
+    query += " WHERE " + conditions.join(" AND ");
+    
     query += " GROUP BY p.id ORDER BY p.created_at DESC";
 
     const products = db.prepare(query).all(...params);
@@ -56,7 +55,7 @@ router.get("/", (req, res) => {
   } catch (err: unknown) {
     // FIXME: sends plain text error — should this be JSON to match other responses?
     const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).send(message);
+    res.status(500).json({ error: message });
   }
 });
 
@@ -88,7 +87,7 @@ router.get("/:id", (req, res) => {
     res.json({ ...product, variants });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).send(message);
+    res.status(500).json({ error: message });
   }
 });
 
@@ -158,7 +157,7 @@ router.put("/:id", (req, res) => {
     res.json(updated);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    res.status(500).send(message);
+    res.status(500).json({ error: message });
   }
 });
 
@@ -172,10 +171,15 @@ router.delete("/:id", (req, res) => {
   const product = db
     .prepare("SELECT * FROM products WHERE id = ?")
     .get(id) as Record<string, unknown> | undefined;
+  
 
   if (!product) {
-    // FIXME: Returns plain text — not JSON like other error responses
-    return res.status(404).send("Product not found");
+    // Fixed, now returns json like all other errors
+    return res.status(404).json({ error: "Product not found" });
+  }
+
+  if (product.deleted_at) {
+    return res.status(404).json({ error: "Product already deleted" });
   }
 
   db.prepare(
