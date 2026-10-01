@@ -1,5 +1,9 @@
 import { Router } from "express";
 import db from "../db.js";
+import {
+  validateVariantUpdate, hasErrors, sendError, findTakenSkus,
+  isUniqueViolation, DUPLICATE_SKU_STATUS,
+} from "../validation.js";
 
 const router = Router();
 
@@ -36,16 +40,42 @@ router.get("/:id", (req, res) => {
  *   "inventory_count": 50
  * }
  */
-router.put("/:id", (_req, res) => {
-  // TODO: Implement variant update
-  // 1. Validate that the variant exists
-  // 2. Validate: price_cents >= 0, inventory_count >= 0, sku is unique (if changed)
-  // 3. Update the variant in the database
-  // 4. Return the updated variant
-  res.status(501).json({
-    error: "Not implemented",
-    hint: "Implement variant update with validation",
-  });
+router.put("/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = Number.isInteger(id)
+      ? (db.prepare("SELECT * FROM variants WHERE id = ?").get(id) as
+          | Record<string, unknown>
+          | undefined)
+      : undefined;
+    if (!existing) return res.status(404).json({ error: "Variant not found" });
+
+    const { errors, data } = validateVariantUpdate(req.body);
+    if (hasErrors(errors)) return sendError(res, errors, 400);
+
+    if (data.sku !== undefined && data.sku !== existing.sku) {
+      if (findTakenSkus([data.sku], id).length > 0)
+        return sendError(res, { sku: `SKU already exists: ${data.sku}` }, DUPLICATE_SKU_STATUS);
+    }
+
+    // ?? (not ||) so that 0 is kept as a real value
+    db.prepare(
+      `UPDATE variants
+       SET sku = COALESCE(?, sku),
+           name = COALESCE(?, name),
+           price_cents = COALESCE(?, price_cents),
+           inventory_count = COALESCE(?, inventory_count),
+           updated_at = datetime('now')
+       WHERE id = ?`
+    ).run(data.sku ?? null, data.name ?? null, data.price_cents ?? null, data.inventory_count ?? null, id);
+
+    res.json(db.prepare("SELECT * FROM variants WHERE id = ?").get(id));
+  } catch (err: unknown) {
+    if (isUniqueViolation(err))
+      return sendError(res, { sku: "SKU already exists" }, DUPLICATE_SKU_STATUS);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
 });
 
 /**
