@@ -18,7 +18,7 @@ export interface ProductInput {
   variants: VariantInput[];
 }
 
-export const DUPLICATE_SKU_STATUS = 409; // change to 400 if the tests expect it
+export const DUPLICATE_SKU_STATUS = 409;
 
 const STATUSES = ["active", "draft", "archived"];
 

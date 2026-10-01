@@ -57,7 +57,7 @@ router.get("/", (req, res) => {
     const products = db.prepare(query).all(...params);
     res.json(products);
   } catch (err: unknown) {
-    // FIXME: sends plain text error — should this be JSON to match other responses?
+    // Fixed, now returns json like all other errors
     const message = err instanceof Error ? err.message : "Unknown error";
     res.status(500).json({ error: message });
   }
