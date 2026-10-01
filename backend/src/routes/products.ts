@@ -1,5 +1,9 @@
 import { Router } from "express";
 import db from "../db.js";
+import {
+  validateNewProduct, hasErrors, sendError, findTakenSkus,
+  isUniqueViolation, DUPLICATE_SKU_STATUS,
+} from "../validation.js";
 
 const router = Router();
 
@@ -106,16 +110,57 @@ router.get("/:id", (req, res) => {
  *   ]
  * }
  */
-router.post("/", (_req, res) => {
-  // TODO: Implement product creation
-  // 1. Validate required fields (name is required, variants array must have at least one entry)
-  // 2. Validate each variant (sku required + unique, price_cents >= 0, inventory_count >= 0)
-  // 3. Insert product and variants inside a transaction
-  // 4. Return the created product with its variants
-  res.status(501).json({
-    error: "Not implemented",
-    hint: "Implement product creation with validation and a database transaction",
-  });
+router.post("/", (req, res) => {
+  try {
+    const { errors, data } = validateNewProduct(req.body);
+    if (hasErrors(errors)) return sendError(res, errors, 400);
+
+    if (data.category_id !== null) {
+      const cat = db.prepare("SELECT id FROM categories WHERE id = ?").get(data.category_id);
+      if (!cat) return sendError(res, { category_id: "Category does not exist" }, 400);
+    }
+
+    const taken = findTakenSkus(data.variants.map((v) => v.sku));
+    if (taken.length > 0)
+      return sendError(res, { sku: `SKU already exists: ${taken.join(", ")}` }, DUPLICATE_SKU_STATUS);
+
+    const insertProduct = db.prepare(
+      `INSERT INTO products (name, description, category_id, status) VALUES (?, ?, ?, ?)`
+    );
+    const insertVariant = db.prepare(
+      `INSERT INTO variants (product_id, sku, name, price_cents, inventory_count) VALUES (?, ?, ?, ?, ?)`
+    );
+
+    // Product + variants succeed or fail together
+    const create = db.transaction(() => {
+      const info = insertProduct.run(data.name, data.description, data.category_id, data.status);
+      const productId = Number(info.lastInsertRowid);
+      for (const v of data.variants) {
+        insertVariant.run(productId, v.sku, v.name, v.price_cents, v.inventory_count);
+      }
+      return productId;
+    });
+    const productId = create();
+
+    const product = db
+      .prepare(
+        `SELECT p.*, c.name AS category_name
+         FROM products p LEFT JOIN categories c ON p.category_id = c.id
+         WHERE p.id = ?`
+      )
+      .get(productId) as Record<string, unknown>;
+    const variants = db
+      .prepare("SELECT * FROM variants WHERE product_id = ? ORDER BY created_at ASC, id ASC")
+      .all(productId);
+
+    res.status(201).json({ ...product, variants });
+  } catch (err: unknown) {
+    // Backstop: a race between the SKU check and the insert
+    if (isUniqueViolation(err))
+      return sendError(res, { sku: "SKU already exists" }, DUPLICATE_SKU_STATUS);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
 });
 
 /**
